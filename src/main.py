@@ -1,5 +1,6 @@
 import os.path
 import numpy
+import numpy as np
 import pandas as pd
 
 from data_wrangling import wrangle_module
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     # 2. How receiving the SMS and not receiving the SMS before the visit affects the no-show when scheduling day
     #    is different then appointment day?
     # 3. How the time interval between the visit and scheduling day affect not showing up?
+    # 4. How does age affect not showing up to the visit? #added
 
 
 
@@ -105,7 +107,6 @@ if __name__ == '__main__':
     # (pie chart) no-show % of all visits
     perc_all_show = (len(input_df[(input_df["No-show"] == "No")]) / len(input_df)) * 100
     perc_all_no_show = 100 - perc_all_show
-    # co chce podać: % show, % no show (values: list, labels: list, colors: list, title: str):
     plot_module.make_pie_chart_percent([perc_all_show, perc_all_no_show], ["False", "True"],
                                            ["lightgreen", "orange"], "Patient no-show at visit")
     # preparing data in percentage how certain factor affects on not showing up:
@@ -137,9 +138,12 @@ if __name__ == '__main__':
               perc_visit_same_day_no_show,
               perc_visit_not_same_day_no_show
               ]
-    plot_module.make_bar_plot_percent(values, labels, ["orange"], "Factor vs no-show percentage")
+    plot_module.make_bar_plot_percent(values, labels, ["orange"], "Factor vs no-show percentage",
+                                      "Factor", "No-show [%]")
     # taking scholarship, receiving SMS and having to wait for the visit for some days are the factors which seems to
     # affect not showing to the visit the most. Let's take a deeper look into receiving SMS.
+    # 2. How receiving the SMS and not receiving the SMS before the visit affects the no-show when scheduling day
+    #    is different then appointment day?
     count_SMS_visit_same_day = len(input_df[(input_df["SMS_received"] == 1) & (input_df["Awaiting_Time"] == 0)])
     print("Count of SMS received if Awaiting_Time = 0: " + str(count_SMS_visit_same_day))
     #
@@ -155,9 +159,10 @@ if __name__ == '__main__':
                                                             / count_visit_not_same_day_no_show) * 100
     plot_module.make_bar_plot_percent([perc_visit_not_same_day_and_SMS_received_no_show, perc_visit_not_same_day_and_SMS_not_received_no_show],
                                       ["SMS received", "SMS not received"],
-                                      ["orange"], "Factor: SMS in appointment day different then scheduling day vs no-show %")
+                                      ["orange"], "Factor: SMS in appointment day different then scheduling day vs no-show %",
+                                      "SMS factor", "No-show [%]")
     #
-    # 2. How the time interval between the visit and scheduling day affect not showing up?
+    # 3. How the time interval between the visit and scheduling day affect not showing up?
     # visit the same day , visit the next day, visit 2-4 days after, visit 5-9 days after, visit 10+ days after
     perc_visit_same_day_no_show = perc_visit_same_day_no_show
     #
@@ -187,27 +192,57 @@ if __name__ == '__main__':
               "2-4 days",
               "5-9 days",
               "10+ days"]
-    plot_module.make_bar_plot_percent(values, labels, ["orange"], "Factor: duration between scheduling and appointment day vs no-show %")
+    plot_module.make_bar_plot_percent(values, labels, ["orange"], "Factor: duration between scheduling and appointment day vs no-show %",
+                                      "Awaiting time", "No-show [%]")
 
 
-
+    # 4. How does age affect not showing up to the visit? #added
+    unique_age_values = list(input_df['Age'].unique())
+    unique_age_show_noshow = [0,1]
+    age_values_count = list()
+    no_show_perc = list()
+    for age in unique_age_values:
+        age_values_count.append(analyse_module.get_counts(input_df, "Age", age))
+        no_show_perc.append(analyse_module.get_no_show_percentage("Age", age, input_df))
+    # scatter plot: #added
+    x_ticks = list(numpy.arange(0, 120, 5))
+    plot_module.make_scatter_plot(unique_age_values, no_show_perc, age_values_count, x_ticks, "Age vs showing up to a visit",
+                                  "Age","No-show %")
+    #
+    # heatmap: #added
+    no_show_values = ["Yes", "No"]
+    unique_age_values = ["0-5", "6-10", "11-15", "16-20", "21-25", "26-35", "36-50", "51-65", "66-80", "81-120"]
+    no_show_counts = list()
+    show_counts = list()
+    for age_range in unique_age_values:
+        interval = age_range.split("-")
+        interval_start = int(interval[0])
+        interval_stop = int(interval[1])
+        no_show_counts.append(analyse_module.get_counts_between_values_with_parameter(
+            input_df, "Age", interval_start, interval_stop, "No-show", "Yes"
+        ))
+        show_counts.append(analyse_module.get_counts_between_values_with_parameter(
+            input_df, "Age", interval_start, interval_stop, "No-show", "No"
+        ))
+    counts = np.array([no_show_counts, show_counts])
+    plot_module.make_heatmap(counts, unique_age_values, no_show_values, "Heatmap of Age vs No_Show", "Age groups", "No-show")
 
 
 
     # ------------------------------  //// Conclusions ////  ------------------------------#
-    # 1.	Based on the analysis, taking scholarship, receiving SMS and having to wait for the visit seems to be
-    #       the 3 factors which have greater share in no-show. Receiving SMS as a factor which increases chances of
-    #       not showing seems to be strange. After taking a deeper look at this factor, we can spot that when
-    #       scheduling day is the same as appointment day, patients are not receiving SMS. It means that we should
-    #       take SMS factor under consideration only for the visits which are not in the scheduling day.
-    #       Additionally, females are slightly more prone to no show at the visit than men, but the difference is
-    #       very small.
+    # 1.	1.	Based on the analysis, age, taking scholarship, receiving SMS and having to wait for the visit seems
+    #       to be the 4 factors which have greater share in no-show. Receiving SMS as a factor which increases chances
+    #       of not showing seems to be strange. After taking a deeper look at this factor, we can spot that when
+    #       scheduling day is the same as appointment day, patients are not receiving SMS. It means that we should take
+    #       SMS factor under consideration only for the visits which are not in the scheduling day.
+    #       Additionally, females are slightly more prone to no show at the visit than men, but the difference is very small.
     # 2.	Analysis on SMS and awaiting time shows, that the percentage difference between SMS impact on no-showing
     #       to the visit in the day different than visit’s scheduling day is very similar. We can say that not
     #       receiving SMS is not affecting not showing up to a visit.
     # 3.	Based on further analysis, we can spot that increase of awaiting time affects on the no-show percentage
     #       – not showing up percentage is increasing.
-    # 4.	Additional research can be done on Neighbourhood factor, and some combined factors, e.g. „How does age
+    # 4.    Moreover, patients between age ~15 and 25 seems to more likely skip the visit.
+    # 5.	Additional research can be done on Neighbourhood factor, and some combined factors, e.g. „How does age
     #       affect on alcoholics showing up to a visit?”, or „How does alcoholism affect people with scholarship showing up to a visit?”.
 
 
